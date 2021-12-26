@@ -22,6 +22,7 @@ import oauth2 as oauth1
 # users module is needed for OpenID authentication.
 from google.appengine.api import urlfetch, users
 
+from config import secrets
 
 __all__ = ['SimpleAuthHandler']
 
@@ -107,10 +108,13 @@ class SimpleAuthHandler(object):
     """
     cfg = self.PROVIDERS.get(provider, (None,))
     meth = '_%s_callback' % cfg[0]
+    logging.info('1')
     if hasattr(self, meth):
       try:
 
+        logging.info('2')
         user_data, auth_info = getattr(self, meth)(provider, *cfg[-1:])
+        logging.info('3')
         # we're done here. the rest should be implemented by the actual app
         self._on_signin(user_data, auth_info, provider)
 
@@ -157,13 +161,22 @@ class SimpleAuthHandler(object):
       self._provider_not_supported(provider)
 
   def _oauth2_callback(self, provider, access_token_url):
+    logging.info('6')
+
     """Step 2 of OAuth 2.0, whenever the user accepts or denies access."""
     code = self.request.get('code', None)
     error = self.request.get('error', None)
     callback_url = self._callback_uri_for(provider)
+
+    logging.info('7')
+
     consumer_key, consumer_secret, scope = self._get_consumer_info_for(provider)
 
+    logging.info('8')
+
     if error:
+      logging.info('9')
+
       raise Exception(error)
 
     payload = {
@@ -181,8 +194,17 @@ class SimpleAuthHandler(object):
       headers={'Content-Type': 'application/x-www-form-urlencoded'}
     )
 
+    logging.info('10')
+    logging.info(resp)
+
     auth_info = getattr(self, self.TOKEN_RESPONSE_PARSERS[provider])(resp.content)
+
+    logging.info('11 ')
+    logging.info('Provider is %s' % provider)
+
     user_data = getattr(self, '_get_%s_user_info' % provider)(auth_info, key=consumer_key, secret=consumer_secret)
+
+    logging.info('12')
 
     return (user_data, auth_info)
 
@@ -221,6 +243,8 @@ class SimpleAuthHandler(object):
     self.redirect(target_url)
 
   def _oauth1_callback(self, provider, access_token_url):
+    logging.info('4')
+
     """Third step of OAuth 1.0 dance."""
     request_token = self.session.pop('req_token', None)
     verifier = self.request.get('oauth_verifier', None)
@@ -260,6 +284,8 @@ class SimpleAuthHandler(object):
       self._provider_not_supported(provider)
 
   def _openid_callback(self, provider='openid', _identity=None):
+    logging.info('5')
+
     """Being called back by an OpenID provider
     after the user has been authenticated.
     """
@@ -292,13 +318,15 @@ class SimpleAuthHandler(object):
   def _get_consumer_info_for(self, provider):
     """Should return a tuple (key, secret, desired_scopes).
     Defaults to None. You should redefine this method and return real values."""
-    return (None, None, None)
+    return secrets.AUTH_CONFIG[provider]
 
   #
   # user profile/info
   #
 
   def _get_google_user_info(self, auth_info, key=None, secret=None):
+    logging.info('13')
+    logging.info(auth_info)
     """Returns a dict of currenly logging in user.
     Google API endpoint:
     https://www.googleapis.com/oauth2/v1/userinfo
@@ -362,7 +390,9 @@ class SimpleAuthHandler(object):
 
   def _oauth2_request(self, url, token):
     """Makes an HTTP request with OAuth 2.0 access token using App Engine URLfetch API"""
-    return urlfetch.fetch(url.format(urlencode({'access_token':token}))).content
+    final_url = url.format(urlencode({'access_token':token}))
+    logging.info('Making OAuth 2.0 request to %s' % final_url)
+    return urlfetch.fetch(final_url).content
 
   def _query_string_parser(self, body):
     """Parses response body of an access token request query and returns
